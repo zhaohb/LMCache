@@ -53,8 +53,13 @@ def _parse_local_disk(local_disk) -> Optional[str]:
     match local_disk:
         case None:
             local_disk_path = None
-        case path if re.match(r"file://(.*)/", path):
+        case path if isinstance(path, str) and path.startswith("file://"):
             local_disk_path = path[7:]
+            # On Windows, a file URI like "file:///C:/dir" becomes "/C:/dir" after
+            # stripping scheme. Normalize it back to "C:/dir" to avoid creating
+            # an invalid "/C:" path.
+            if os.name == "nt" and re.match(r"^/[A-Za-z]:", local_disk_path):
+                local_disk_path = local_disk_path[1:]
         case _:
             local_disk_path = local_disk
     return local_disk_path

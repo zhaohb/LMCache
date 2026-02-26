@@ -129,12 +129,28 @@ class LocalDiskBackend(StorageBackendInterface):
         self.use_local_cpu = config.local_cpu
 
         # Block size (for file system I/O)
-        stat = os.statvfs(self.path)
-        self.os_disk_bs = stat.f_bsize
+        if hasattr(os, "statvfs"):
+            stat = os.statvfs(self.path)
+            self.os_disk_bs = stat.f_bsize
+        else:
+            # Windows doesn't provide os.statvfs. Use a safe default (4KiB).
+            self.os_disk_bs = 4096
+            logger.info(
+                "os.statvfs is unavailable on this platform; "
+                "using default disk block size: %d bytes",
+                self.os_disk_bs,
+            )
         self.use_odirect = False
 
         if config.extra_config is not None:
             self.use_odirect = config.extra_config.get("use_odirect", False)
+        # O_DIRECT is POSIX-specific and is not available on Windows.
+        if self.use_odirect and not hasattr(os, "O_DIRECT"):
+            logger.warning(
+                "O_DIRECT was requested but is unsupported on this platform; "
+                "disabling O_DIRECT."
+            )
+            self.use_odirect = False
         logger.info("Using O_DIRECT for disk I/O: %s", self.use_odirect)
 
         self.disk_worker = LocalDiskWorker(loop)
